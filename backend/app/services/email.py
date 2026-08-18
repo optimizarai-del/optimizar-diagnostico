@@ -43,16 +43,21 @@ def enviar(destinatario: str, nombre: str, contenido: ContenidoDiagnostico, url:
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         raise RuntimeError("Falta configurar SMTP_USER / SMTP_PASSWORD")
 
+    # Solo el primer nombre, igual que en la página del diagnóstico. Con el
+    # nombre completo suena a carta formal, y quedaba inconsistente entre los
+    # dos lados: "Juan," en la web y "Juan Pérez," en el mail.
+    primero = nombre.split()[0] if nombre.split() else nombre
+
     msg = EmailMessage()
-    msg["Subject"] = f"{nombre}, tu diagnóstico de Optimizar"
+    msg["Subject"] = f"{primero}, tu diagnóstico de Optimizar"
     msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
     msg["To"] = destinatario
     msg.set_content(
-        f"{nombre}, esto es lo que encontramos:\n\n{contenido.titular}\n\n"
+        f"{primero}, esto es lo que encontramos:\n\n{contenido.titular}\n\n"
         f"{contenido.resumen}\n\nVer el diagnóstico completo: {url}\n\n"
         "Optimizar"
     )
-    msg.add_alternative(_html(nombre, contenido, url), subtype="html")
+    msg.add_alternative(_html(primero, contenido, url), subtype="html")
 
     with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
         smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
