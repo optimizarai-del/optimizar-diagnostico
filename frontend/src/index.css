@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-fondo text-texto-medio font-sans antialiased;
+  }
+
+  /* La marca no usa serif ni fuentes decorativas — solo Poppins. */
+  h1, h2, h3 {
+    @apply text-texto-fuerte font-semibold tracking-tight;
+  }
+
+  ::selection {
+    @apply bg-marca-acento/40 text-white;
+  }
+}
+
+@layer components {
+  .contenedor {
+    @apply mx-auto w-full max-w-2xl px-5;
+  }
+
+  /* Texto con el gradiente azul → violeta → magenta de brand.md */
+  .texto-gradiente {
+    @apply bg-marca-gradiente bg-clip-text text-transparent;
+  }
+
+  .boton {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-7 py-4
+           text-base font-semibold text-white transition
+           bg-marca-gradiente
+           hover:brightness-110 active:brightness-95
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100;
+  }
+
+  .boton-fantasma {
+    @apply inline-flex items-center justify-center rounded-xl border border-borde
+           px-6 py-3 text-sm font-medium text-texto-suave transition
+           hover:border-marca-acento/60 hover:text-texto-medio;
+  }
+
+  /* Opción del formulario. Un toque = seleccionada y avanza. */
+  .opcion {
+    @apply w-full rounded-xl border border-borde bg-superficie px-5 py-4 text-left
+           text-[15px] leading-snug text-texto-medio transition
+           hover:border-marca-acento/70 hover:bg-superficie/80
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-marca-acento;
+  }
+
+  .opcion-activa {
+    @apply border-marca-acento bg-marca-acento/10 text-texto-fuerte;
+  }
+
+  .tarjeta {
+    @apply rounded-2xl border border-borde bg-superficie p-6 sm:p-8;
+  }
+
+  .etiqueta {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-marca-acento;
+  }
+}

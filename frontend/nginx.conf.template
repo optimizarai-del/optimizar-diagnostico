@@ -1,0 +1,25 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA: /diagnostico y /d/{token} son rutas de React, no archivos
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # El destino cambia según dónde se despliegue: en docker-compose el servicio
+    # se llama "backend", en EasyPanel lleva el prefijo del proyecto. Se resuelve
+    # con la variable BACKEND_URL, que nginx sustituye al arrancar.
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+}
