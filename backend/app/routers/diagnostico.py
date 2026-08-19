@@ -1,14 +1,15 @@
 """Endpoints públicos: recibir el formulario, generar y servir el diagnóstico."""
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import SessionLocal, get_db
-from ..models import Diagnostico, Evento
+from ..models import Diagnostico, Evento, Solicitud
 from ..schemas import DiagnosticoCrear, DiagnosticoPublico, EventoCrear
 from ..scoring import calificar
 from ..services import ai, email, whatsapp
@@ -24,6 +25,59 @@ def _ahora() -> datetime:
 def _registrar(db: Session, tipo: str, variante: str | None, diagnostico_id: int | None = None, **datos) -> None:
     db.add(Evento(tipo=tipo, variante=variante, diagnostico_id=diagnostico_id, datos=datos))
     db.commit()
+
+
+# --- Límites del endpoint público ----------------------------------------
+
+def _ip_cliente(request: Request) -> str:
+    """IP real del visitante.
+
+    Detrás de Traefik el `request.client.host` es el del proxy, así que el dato
+    bueno está en X-Forwarded-For. Traefik va agregando al final, por lo que el
+    primer elemento es el cliente original.
+    """
+    reenviado = request.headers.get("x-forwarded-for", "")
+    if reenviado:
+        return reenviado.split(",")[0].strip()[:64]
+    return request.client.host[:64] if request.client else "desconocido"
+
+
+def _verificar_limite(db: Session, ip: str) -> None:
+    """Corta el request con 429 si se pasó de los topes configurados.
+
+    Se cuenta lo aceptado, no lo intentado: una persona real que completa el
+    formulario una vez nunca lo ve.
+    """
+    ahora = _ahora()
+    desde_dia = ahora - timedelta(days=1)
+    desde_hora = ahora - timedelta(hours=1)
+
+    def _contar(*filtros) -> int:
+        return db.query(func.count(Solicitud.id)).filter(*filtros).scalar() or 0
+
+    if _contar(Solicitud.creado_at >= desde_dia) >= settings.LIMITE_GLOBAL_DIA:
+        log.error("Tope global diario alcanzado (%s). Endpoint cerrado por hoy.",
+                  settings.LIMITE_GLOBAL_DIA)
+        raise HTTPException(
+            429,
+            "Estamos recibiendo muchas consultas hoy. Escribinos por WhatsApp y "
+            "te hacemos el diagnóstico igual.",
+            headers={"Retry-After": "3600"},
+        )
+
+    if _contar(Solicitud.ip == ip, Solicitud.creado_at >= desde_dia) >= settings.LIMITE_IP_DIA:
+        raise HTTPException(
+            429,
+            "Ya hiciste varios diagnósticos hoy. Si necesitás otro, escribinos por WhatsApp.",
+            headers={"Retry-After": "86400"},
+        )
+
+    if _contar(Solicitud.ip == ip, Solicitud.creado_at >= desde_hora) >= settings.LIMITE_IP_HORA:
+        raise HTTPException(
+            429,
+            "Esperá un rato antes de mandar otro diagnóstico. Si es urgente, escribinos por WhatsApp.",
+            headers={"Retry-After": "3600"},
+        )
 
 
 # --- Generación en background --------------------------------------------
@@ -80,7 +134,15 @@ def _procesar(diagnostico_id: int) -> None:
 # --- Endpoints ------------------------------------------------------------
 
 @router.post("/diagnostico", status_code=201)
-def crear(payload: DiagnosticoCrear, tareas: BackgroundTasks, db: Session = Depends(get_db)):
+def crear(
+    payload: DiagnosticoCrear,
+    tareas: BackgroundTasks,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ip = _ip_cliente(request)
+    _verificar_limite(db, ip)
+
     if payload.variante == "a" and not payload.email:
         raise HTTPException(422, "La variante A necesita email")
     if payload.variante == "b" and not payload.telefono:
@@ -102,6 +164,7 @@ def crear(payload: DiagnosticoCrear, tareas: BackgroundTasks, db: Session = Depe
         telefono=(payload.telefono or "").strip() or None,
     )
     db.add(d)
+    db.add(Solicitud(ip=ip))
     db.commit()
     db.refresh(d)
 

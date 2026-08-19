@@ -69,3 +69,23 @@ class Evento(Base):
     creado_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
 
     diagnostico: Mapped[Diagnostico | None] = relationship(back_populates="eventos")
+
+
+class Solicitud(Base):
+    """Una fila por formulario aceptado, con la IP. Solo sirve para frenar abuso.
+
+    Va en tabla aparte y no como columna de `diagnosticos` a propósito: así la
+    crea sola `create_all` al arrancar, sin migración sobre la base que ya está
+    en producción.
+
+    Las filas se acumulan, pero son dos columnas: aun con miles de formularios
+    por mes el costo es despreciable.
+    """
+
+    __tablename__ = "solicitudes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_ahora, index=True
+    )

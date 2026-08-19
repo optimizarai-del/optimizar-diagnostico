@@ -30,6 +30,15 @@ class Settings:
     # Clave para los endpoints de métricas
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
 
+    # Límites del endpoint público. Cada formulario completado es una llamada
+    # paga a Claude, y la URL va a estar en un anuncio: sin esto, veinte envíos
+    # de un curioso o un bot se ven en la factura.
+    # Los dos primeros frenan al visitante individual; el tercero es el tope
+    # de gasto diario, la red de seguridad ante algo que no previmos.
+    LIMITE_IP_HORA: int = int(os.getenv("LIMITE_IP_HORA", "3"))
+    LIMITE_IP_DIA: int = int(os.getenv("LIMITE_IP_DIA", "6"))
+    LIMITE_GLOBAL_DIA: int = int(os.getenv("LIMITE_GLOBAL_DIA", "300"))
+
     CORS_ORIGINS: list[str] = os.getenv(
         "CORS_ORIGINS", "http://localhost:5173,http://localhost:4173"
     ).split(",")
